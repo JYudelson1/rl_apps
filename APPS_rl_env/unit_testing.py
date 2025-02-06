@@ -1,5 +1,5 @@
 from typing import *
-from run_cpp import CppRunner
+from .run_cpp import CppRunner
 import os, json, re
 
 def test_one_solution_full(code: str, input_output_string: str) -> Tuple[bool, List[str]]:

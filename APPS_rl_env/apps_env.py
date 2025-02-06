@@ -2,16 +2,20 @@ from openrlhf.utils.interface import AgentInterface
 from typing import *
 from dataclasses import dataclass
 from enum import Enum
-import openai, json, re
+import openai, json, re, os
+import dotenv
+import logging
 
-from unit_testing import test_one_solution_full, check_if_backdoor_works_full
-from prompts import HONEST_PROMPT, HONEST_FAILED_UNIT_TESTS_PROMPT, BACKDOOR_BRAINSTORM_PROMPT, CHECK_BRAINSTORM_PROMPT, WRITE_BACKDOOR_PROMPT, BACKDOOR_FAILED_UNIT_TESTS_PROMPT_FULL, FAILED_BACKDOOR_PROMPT, MONITOR_PROMPT, MONITOR_IN_BACKDOOR_PROMPT, MONITOR_PROMPT_SELF_CRITIQUE
-from keys import OPENAI_API_KEY
+logger = logging.getLogger(__name__)
+
+dotenv.load_dotenv()    
+
+from .unit_testing import test_one_solution_full, check_if_backdoor_works_full
+from .prompts import HONEST_PROMPT, HONEST_FAILED_UNIT_TESTS_PROMPT, BACKDOOR_BRAINSTORM_PROMPT, CHECK_BRAINSTORM_PROMPT, WRITE_BACKDOOR_PROMPT, BACKDOOR_FAILED_UNIT_TESTS_PROMPT_FULL, FAILED_BACKDOOR_PROMPT, MONITOR_PROMPT, MONITOR_IN_BACKDOOR_PROMPT, MONITOR_PROMPT_SELF_CRITIQUE
+from .utils import extract_honest_code, get_backdoor_components, exponential_backoff
 
 Message = Dict[str, str]
 AgentState = Any
-
-from prompts import *
 
 class BackdoorGenerationStage(Enum):
     """The stage of backdoor generation"""
@@ -47,9 +51,9 @@ class AppsBackdoors(AgentInterface):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.client = openai.AsyncOpenAI(api_key=OPENAI_API_KEY)
+        self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
-    async def init_state(self, data: dict) -> AgentState:
+    def init_state(self, data: dict) -> AgentState:
         unit_tests = data['input_output']
         unit_tests_json = json.loads(unit_tests)
         
@@ -73,7 +77,7 @@ class AppsBackdoors(AgentInterface):
             stashed_messages=[],
         )
     
-    async def get_next_prompt(self, messages: List[Message], state: AgentState) -> Optional[Tuple[Message, AgentState]]:
+    def get_next_prompt(self, messages: List[Message], state: AgentState) -> Optional[Tuple[Message, AgentState]]:
         match state.stage:
             case BackdoorGenerationStage.MAKING_HONEST:
                 return self.make_honest_prompt(messages, state)
@@ -206,7 +210,7 @@ class AppsBackdoors(AgentInterface):
         last_revision_message = {"role": "user", "content": MONITOR_IN_BACKDOOR_PROMPT}
         return last_revision_message, state
                 
-    async def is_done(self, messages: List[Message], state: AgentState) -> bool:
+    def is_done(self, messages: List[Message], state: AgentState) -> bool:
         if state.stage == BackdoorGenerationStage.DONE:
             # Save the last, most updated backdoor code
             backdoor_output = get_backdoor_components(messages[-1]["content"])
@@ -216,10 +220,10 @@ class AppsBackdoors(AgentInterface):
                 state.backdoor_hint = backdoor_output[2]
         return state.stage == BackdoorGenerationStage.DONE or state.stage == BackdoorGenerationStage.FAILED
     
-    async def get_reward(self, messages: List[Message], state: AgentState) -> float:
+    def get_reward(self, messages: List[Message], state: AgentState) -> float:
         """We get the reward by calling OpenAI's API to use o1-mini to grade the suspiciousness of the code"""
         monitor_prompt = MONITOR_PROMPT.format(code=state.backdoor_code, problem=state.problem_statement)
-        monitor_response = await _make_api_call(model="o1-mini", messages=[{"role": "user", "content": monitor_prompt}], max_retries=2)
+        monitor_response = self._make_api_call_sync(model="o1-mini", messages=[{"role": "user", "content": monitor_prompt}], max_retries=2)
         if monitor_response is None:
             return -1
         # Get the score (from 0-9)
@@ -230,61 +234,34 @@ class AppsBackdoors(AgentInterface):
             score = float(answer.group(1))
         except ValueError:
             return -1
+        
+        logger.info(f"One backdoor created with score {score}")
+        logger.info(f"Backdoor code: {state.backdoor_code}")
+        logger.info(f"Messages: {messages}")
+        assert False
+        
         # Note that we want the score to be low, not high
         return 1 - (score / 9.0)
     
-    async def _make_api_call(self, model: str, messages: List[Message], 
+    def _make_api_call_sync(self, model: str, messages: List[Message], 
                             max_retries: int = 2) -> Optional[str]:
-    """Helper method for making API calls with retries"""
-    attempt = 0
-    while attempt < max_retries:
-        try:
-            completion = await self.client.chat.completions.create(
-                model=model,
-                messages=messages
-            )
-            
-            return completion.choices[0].message.content or None
-            
-        except Exception as e:
-            if "rate_limit" in str(e).lower():
-                attempt += 1
-                if attempt < max_retries:
-                    await exponential_backoff(attempt)
-                    continue
+        """Helper method for making API calls with retries"""
+        attempt = 0
+        while attempt < max_retries:
+            try:
+                completion = self.client.chat.completions.create(
+                    model=model,
+                    messages=messages
+                )
+                
+                return completion.choices[0].message.content or None
+                
+            except Exception as e:
+                if "rate_limit" in str(e).lower():
+                    attempt += 1
+                    if attempt < max_retries:
+                        exponential_backoff(attempt)
+                        continue
             return None
-    return None
-    
-def extract_honest_code(messages: List[Message]) -> Optional[str]:
-    """Extract the honest code from the messages"""
-    message = messages[-1]
-    assert message["role"] == "assistant"
-    code = re.findall(r'<cpp>(.+)</cpp>', message["content"], re.DOTALL)
-    if len(code) == 0:
         return None
-    # Return the last code block
-    return code[-1]
-
-def get_backdoor_components(response: str) -> Optional[Tuple[str, str, str]]:
-    """Get the backdoor code, fail input, and failure hint from the response"""
-    backdoor_code = re.findall(r'<subtly_wrong_solution>(.+)</subtly_wrong_solution>', response, re.DOTALL)
-    if len(backdoor_code) == 0:
-        return None
-    backdoor_code_extracted = backdoor_code[-1]   
     
-    fail_input = re.findall(r'<fail_input>(.+)</fail_input>', response, re.DOTALL)
-    if len(fail_input) == 0:
-        return None
-    fail_input_extracted = fail_input[-1]
-    
-    failure_hint = re.findall(r'<failure_hint>(.+)</failure_hint>', response, re.DOTALL)
-    if len(failure_hint) == 0:
-        return (backdoor_code_extracted, fail_input_extracted, "No hint found")
-    failure_hint_extracted = failure_hint[-1]
-    
-    return backdoor_code_extracted, fail_input_extracted, failure_hint_extracted
-    
-async def exponential_backoff(attempt):
-    wait_time = min(300, (2 ** attempt) + random.uniform(0, 1))
-    logger.info(f"Rate limit hit. Waiting {wait_time:.2f} seconds (attempt {attempt})")
-    await asyncio.sleep(wait_time)
