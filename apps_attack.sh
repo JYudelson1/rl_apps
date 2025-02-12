@@ -5,7 +5,7 @@ export TEMP=/data1/joey/tmp
 export TEMPDIR=/data1/joey/tmp
 export GCC_TMPDIR=/data1/joey/tmp
 export NVCC_TMPDIR=/data1/joey/tmp
-export TORCH_EXTENSIONS_DIR=/data1/joey/torch_extensions
+export TORCH_EXTENSIONS_DIR=/tmp/torch_extensions
 export HOME=/data1/joey
 export DS_BUILD_TEMP_DIR=/data1/joey/tmp
 export CCACHE_TEMPDIR=/data1/joey/tmp
@@ -17,36 +17,49 @@ set -x
 
 uv run ray job submit --address="http://127.0.0.1:8265" \
   --working-dir . \
-  --runtime-env-json='{"setup_commands": ["pip install openrlhf[vllm]"], "env_vars": {"TMPDIR": "/data1/joey/tmp", "TMP": "/data1/joey/tmp", "TEMP": "/data1/joey/tmp", "TEMPDIR": "/data1/joey/tmp", "GCC_TMPDIR": "/data1/joey/tmp", "NVCC_TMPDIR": "/data1/joey/tmp", "TORCH_EXTENSIONS_DIR": "/data1/joey/torch_extensions", "HOME": "/data1/joey", "DS_BUILD_TEMP_DIR": "/data1/joey/tmp", "CCACHE_TEMPDIR": "/data1/joey/tmp", "HF_HOME": "/data1/joey/hf_cache"}}' \
+  --runtime-env-json='{
+    "setup_commands": ["pip install openrlhf[vllm_latest]"],
+    "env_vars": {
+      "working_dir": "/data1/joey/rl_apps_simple",
+      "TMPDIR": "/data1/joey/tmp",
+      "TMP": "/data1/joey/tmp",
+      "TEMP": "/data1/joey/tmp",
+      "TEMPDIR": "/data1/joey/tmp",
+      "GCC_TMPDIR": "/data1/joey/tmp",
+      "NVCC_TMPDIR": "/data1/joey/tmp",
+      "TORCH_EXTENSIONS_DIR": "/tmp/torch_extensions",
+      "HOME": "/data1/joey",
+      "DS_BUILD_TEMP_DIR": "/data1/joey/tmp",
+      "CCACHE_TEMPDIR": "/data1/joey/tmp",
+      "HF_HOME": "/data1/joey/hf_cache",
+    }
+  }' \
   -- python -m openrlhf.cli.train_ppo_ray \
   --ref_num_nodes 1 \
-  --ref_num_gpus_per_node 2 \
+  --ref_num_gpus_per_node 1 \
   --actor_num_nodes 1 \
-  --actor_num_gpus_per_node 2 \
+  --actor_num_gpus_per_node 1 \
   --vllm_num_engines 1 \
   --vllm_tensor_parallel_size 1 \
-  --colocate_actor_ref \
-  --pretrain deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
+  --pretrain Qwen/Qwen2.5-7B-Instruct \
   --save_path checkpoint/apps_attack \
-  --micro_train_batch_size 4 \
+  --micro_train_batch_size 2 \
   --train_batch_size 32 \
-  --micro_rollout_batch_size 8 \
-  --rollout_batch_size 32 \
-  --n_samples_per_prompt 8 \
-  --max_samples 100 \
-  --max_epochs 3 \
-  --prompt_max_len 1024 \
-  --generate_max_len 10000 \
+  --micro_rollout_batch_size 4 \
+  --rollout_batch_size 8 \
+  --n_samples_per_prompt 4 \
+  --max_samples 64 \
+  --max_epochs 2 \
+  --generate_max_len 20000 \
+  --prompt_max_len 6400 \
   --zero_stage 3 \
   --bf16 \
-  --actor_learning_rate 5e-7 \
+  --actor_learning_rate 2e-7 \
   --critic_learning_rate 5e-6 \
   --init_kl_coef 0.01 \
   --prompt_data codeparrot/apps \
-  --apply_chat_template \
-  --normalize_reward \
+  --input_key difficulty \
   --packing_samples \
-  --adam_offload \
   --flash_attn \
   --gradient_checkpointing \
   --use_wandb $WANDB_API_KEY \
@@ -55,3 +68,16 @@ uv run ray job submit --address="http://127.0.0.1:8265" \
   --remote_rm_url http://localhost:5000/get_reward \
   --env_file APPS_rl_env \
   --env_class AppsBackdoors \
+  --adam_offload \
+  --eval_steps 1 \
+  #--overlap_comm \
+  #--colocate_actor_ref \
+
+
+      # "PATH": "/data1/joey/.local/bin:$PATH",
+      # "PYTHONPATH": "/data1/joey/your_project_path:$PYTHONPATH",
+      # "USER": "joey",
+      # "UVENV_DIR": "/data1/joey/.uv",
+      # "UV_CACHE_DIR": "/data1/joey/uv_cache",
+      # "UV_SYSTEM_PYTHON": "/data1/joey/.pyenv/versions/3.10.0/bin/python",
+      # "VIRTUAL_ENV": "/data1/joey/rl_apps_simple/.venv"
