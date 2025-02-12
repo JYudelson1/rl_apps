@@ -8,3 +8,4 @@ deprecated/
 APPS_rl_env/keys.py
 *.egg-info/
 uv.lock
+.mypy_cache/
