@@ -32,6 +32,8 @@ uv run ray job submit --address="http://127.0.0.1:8265" \
       "DS_BUILD_TEMP_DIR": "/data1/joey/tmp",
       "CCACHE_TEMPDIR": "/data1/joey/tmp",
       "HF_HOME": "/data1/joey/hf_cache",
+      "OPENAI_API_KEY": "'$OPENAI_API_KEY'"
+
     }
   }' \
   -- python -m openrlhf.cli.train_ppo_ray \
