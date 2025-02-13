@@ -1,15 +1,15 @@
 # WITH TMP ACCESS, REMOVE MOST OF THESE
-export TMPDIR=/data1/joey/tmp
-export TMP=/data1/joey/tmp
-export TEMP=/data1/joey/tmp
-export TEMPDIR=/data1/joey/tmp
-export GCC_TMPDIR=/data1/joey/tmp
-export NVCC_TMPDIR=/data1/joey/tmp
-export TORCH_EXTENSIONS_DIR=/tmp/torch_extensions
-export HOME=/data1/joey
-export DS_BUILD_TEMP_DIR=/data1/joey/tmp
-export CCACHE_TEMPDIR=/data1/joey/tmp
-export HF_HOME=/data1/joey/hf_cache
+# export TMPDIR=/data1/joey/tmp
+# export TMP=/data1/joey/tmp
+# export TEMP=/data1/joey/tmp
+# export TEMPDIR=/data1/joey/tmp
+# export GCC_TMPDIR=/data1/joey/tmp
+# export NVCC_TMPDIR=/data1/joey/tmp
+# export TORCH_EXTENSIONS_DIR=/tmp/torch_extensions
+# export HOME=/data1/joey
+# export DS_BUILD_TEMP_DIR=/data1/joey/tmp
+# export CCACHE_TEMPDIR=/data1/joey/tmp
+# export HF_HOME=/data1/joey/hf_cache
 
 source .env
 
@@ -20,18 +20,7 @@ uv run ray job submit --address="http://127.0.0.1:8265" \
   --runtime-env-json='{
     "setup_commands": ["pip install openrlhf[vllm_latest]"],
     "env_vars": {
-      "working_dir": "/data1/joey/rl_apps_simple",
-      "TMPDIR": "/data1/joey/tmp",
-      "TMP": "/data1/joey/tmp",
-      "TEMP": "/data1/joey/tmp",
-      "TEMPDIR": "/data1/joey/tmp",
-      "GCC_TMPDIR": "/data1/joey/tmp",
-      "NVCC_TMPDIR": "/data1/joey/tmp",
-      "TORCH_EXTENSIONS_DIR": "/tmp/torch_extensions",
-      "HOME": "/data1/joey",
-      "DS_BUILD_TEMP_DIR": "/data1/joey/tmp",
-      "CCACHE_TEMPDIR": "/data1/joey/tmp",
-      "HF_HOME": "/data1/joey/hf_cache",
+      
       "OPENAI_API_KEY": "'$OPENAI_API_KEY'"
 
     }
@@ -83,3 +72,14 @@ uv run ray job submit --address="http://127.0.0.1:8265" \
       # "UV_CACHE_DIR": "/data1/joey/uv_cache",
       # "UV_SYSTEM_PYTHON": "/data1/joey/.pyenv/versions/3.10.0/bin/python",
       # "VIRTUAL_ENV": "/data1/joey/rl_apps_simple/.venv"
+      # "TMPDIR": "/data1/joey/tmp",
+      # "TMP": "/data1/joey/tmp",
+      # "TEMP": "/data1/joey/tmp",
+      # "TEMPDIR": "/data1/joey/tmp",
+      # "GCC_TMPDIR": "/data1/joey/tmp",
+      # "NVCC_TMPDIR": "/data1/joey/tmp",
+      # "TORCH_EXTENSIONS_DIR": "/tmp/torch_extensions",
+      # "HOME": "/data1/joey",
+      # "DS_BUILD_TEMP_DIR": "/data1/joey/tmp",
+      # "CCACHE_TEMPDIR": "/data1/joey/tmp",
+      # "HF_HOME": "/data1/joey/hf_cache",
